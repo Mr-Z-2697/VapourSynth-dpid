@@ -1,10 +1,6 @@
 name: Build for Windows
 
 on:
-  push:
-    paths:
-      - 'Source/*'
-      - '.github/workflows/build.yaml'
   workflow_dispatch:
     inputs:
       tag:
@@ -45,7 +41,7 @@ jobs:
       working-directory: Source
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: release-windows-x64
         path: Source/builddir/*.dll
