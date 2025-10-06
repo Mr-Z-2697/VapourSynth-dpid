@@ -126,7 +126,7 @@ static void dpidProcess(const T * VS_RESTRICT srcp, int src_stride,
     float src_left, float src_top) {
 
     if (lambda == 1.0f)
-        return dpidProcess(srcp, src_stride, downp, down_stride, dstp, dst_stride, src_w, src_h, dst_w, dst_h, lambda, src_left, src_top);
+        return dpidProcess2(srcp, src_stride, downp, down_stride, dstp, dst_stride, src_w, src_h, dst_w, dst_h, lambda, src_left, src_top);
 
     const float scale_x = static_cast<float>(src_w) / dst_w;
     const float scale_y = static_cast<float>(src_h) / dst_h;
@@ -526,6 +526,7 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
         "src_top:float[]:opt;"
         "read_chromaloc:int:opt;", dpidCreate, 0, plugin);
 }
+
 
 
 
