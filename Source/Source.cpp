@@ -35,6 +35,31 @@ static float contribution(float f, float x, float y,
     return f;
 }
 
+static float dpid_pow(float base, float exp)
+{
+    int iexp = static_cast<int>(exp);
+    if ((exp < 26) && ((exp - iexp) < 1e-5))
+    {
+        float ret = 1.f;
+        for (int i = 0; i < iexp; i++)
+            ret *= base;
+        return ret;
+    }
+    else
+        return std::pow(base,exp);
+}
+
+template<typename T>
+static T dpid_clamp(T v, T lo, T hi)
+{
+    if (v >= lo && v <= hi)
+        return v;
+    else if (v < lo)
+        return lo;
+    else
+        return hi;
+}
+
 template<typename T>
 static void dpidProcess(const T * VS_RESTRICT srcp, int src_stride, 
     const T * VS_RESTRICT downp, int down_stride, 
@@ -53,8 +78,8 @@ static void dpidProcess(const T * VS_RESTRICT srcp, int src_stride,
             for (int inner_y = -1; inner_y <= 1; ++inner_y) {
                 for (int inner_x = -1; inner_x <= 1; ++inner_x) {
 
-                    int y = std::clamp(outer_y + inner_y, 0, dst_h - 1);
-                    int x = std::clamp(outer_x + inner_x, 0, dst_w - 1);
+                    int y = dpid_clamp(outer_y + inner_y, 0, dst_h - 1);
+                    int x = dpid_clamp(outer_x + inner_x, 0, dst_w - 1);
 
                     T pixel = downp[y * down_stride + x];
                     avg += pixel * (2 - std::abs(inner_y)) * (2 - std::abs(inner_x));
@@ -63,10 +88,10 @@ static void dpidProcess(const T * VS_RESTRICT srcp, int src_stride,
             avg /= 16.f;
 
             // Dpid
-            const float sx = std::clamp(outer_x * scale_x + src_left, 0.f, static_cast<float>(src_w));
-            const float ex = std::clamp((outer_x + 1) * scale_x + src_left, 0.f, static_cast<float>(src_w));
-            const float sy = std::clamp(outer_y * scale_y + src_top, 0.f, static_cast<float>(src_h));
-            const float ey = std::clamp((outer_y + 1) * scale_y + src_top, 0.f, static_cast<float>(src_h));
+            const float sx = dpid_clamp(outer_x * scale_x + src_left, 0.f, static_cast<float>(src_w));
+            const float ex = dpid_clamp((outer_x + 1) * scale_x + src_left, 0.f, static_cast<float>(src_w));
+            const float sy = dpid_clamp(outer_y * scale_y + src_top, 0.f, static_cast<float>(src_h));
+            const float ey = dpid_clamp((outer_y + 1) * scale_y + src_top, 0.f, static_cast<float>(src_h));
 
             const int sxr = static_cast<int>(std::floor(sx));
             const int exr = static_cast<int>(std::ceil(ex));
@@ -80,7 +105,7 @@ static void dpidProcess(const T * VS_RESTRICT srcp, int src_stride,
                 for (int inner_x = sxr; inner_x < exr; ++inner_x) {
                     T pixel = srcp[inner_y * src_stride + inner_x];
                     float distance = std::abs(avg - static_cast<float>(pixel));
-                    float weight = std::pow(distance, lambda);
+                    float weight = dpid_pow(distance, lambda);
                     weight = contribution(weight, static_cast<float>(inner_x), static_cast<float>(inner_y), sx, ex, sy, ey);
 
                     sum_pixel += weight * pixel;
@@ -440,3 +465,5 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
         "src_top:float[]:opt;"
         "read_chromaloc:int:opt;", dpidCreate, 0, plugin);
 }
+
+
