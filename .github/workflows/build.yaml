@@ -33,7 +33,7 @@ jobs:
       run: meson setup builddir/ -Db_vscrt=mt
       env:
         CXX: clang-cl
-        CXXFLAGS: -mavx -mfma -Xclang -ffast-math
+        CXXFLAGS: -mavx -mavx2 -mfma -Xclang -ffast-math
       working-directory: Source
 
     - name: Meson compile
