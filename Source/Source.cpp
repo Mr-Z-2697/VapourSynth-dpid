@@ -35,21 +35,24 @@ static float contribution(float f, float x, float y,
     return f;
 }
 
-static float dpid_pow(float base, float exp)
+static float (* dpid_pow)(float, float);
+
+static float dpid_pow_iexp(float base, float exp)
 {
-    int iexp = static_cast<int>(exp);
-    // this "accidently" disables negative lambda, but negative lambda distroies output so whatever
-    if ((exp < 26) && ((exp - iexp) < 1e-5))
-    {
-        float ret = 1.f;
-        for (int i = 0; i < iexp; i++)
-            ret *= base;
-        return ret;
-    }
-    else if (exp == 0.5f)
-        return std::sqrt(base);
-    else [[unlikely]]
-        return std::pow(base,exp);
+    float ret = 1.f;
+    for (int i=0; i < static_cast<int>(exp); i++)
+        ret *= base;
+    return ret;
+}
+
+static float dpid_pow_sqrt(float base, float)
+{
+    return std::sqrt(base);
+}
+
+static float dpid_pow_pow(float base, float exp)
+{
+    return std::pow(base, exp);
 }
 
 template<typename T>
@@ -64,72 +67,11 @@ static T dpid_clamp(T v, T lo, T hi)
 }
 
 template<typename T>
-static void dpidProcess2(const T * VS_RESTRICT srcp, int src_stride, 
-    const T * VS_RESTRICT downp, int down_stride, 
-    T * VS_RESTRICT dstp, int dst_stride, 
-    int src_w, int src_h, int dst_w, int dst_h, float lambda, 
-    float src_left, float src_top) {
-
-    const float scale_x = static_cast<float>(src_w) / dst_w;
-    const float scale_y = static_cast<float>(src_h) / dst_h;
-
-    for (int outer_y = 0; outer_y < dst_h; ++outer_y) {
-        for (int outer_x = 0; outer_x < dst_w; ++outer_x) {
-
-            // avg = RemoveGrain(down, 11)
-            float avg {};
-            for (int inner_y = -1; inner_y <= 1; ++inner_y) {
-                for (int inner_x = -1; inner_x <= 1; ++inner_x) {
-
-                    int y = dpid_clamp(outer_y + inner_y, 0, dst_h - 1);
-                    int x = dpid_clamp(outer_x + inner_x, 0, dst_w - 1);
-
-                    T pixel = downp[y * down_stride + x];
-                    avg += pixel * (2 - std::abs(inner_y)) * (2 - std::abs(inner_x));
-                }
-            }
-            avg /= 16.f;
-
-            // Dpid
-            const float sx = dpid_clamp(outer_x * scale_x + src_left, 0.f, static_cast<float>(src_w));
-            const float ex = dpid_clamp((outer_x + 1) * scale_x + src_left, 0.f, static_cast<float>(src_w));
-            const float sy = dpid_clamp(outer_y * scale_y + src_top, 0.f, static_cast<float>(src_h));
-            const float ey = dpid_clamp((outer_y + 1) * scale_y + src_top, 0.f, static_cast<float>(src_h));
-
-            const int sxr = static_cast<int>(std::floor(sx));
-            const int exr = static_cast<int>(std::ceil(ex));
-            const int syr = static_cast<int>(std::floor(sy));
-            const int eyr = static_cast<int>(std::ceil(ey));
-
-            float sum_pixel {};
-            float sum_weight {};
-
-            for (int inner_y = syr; inner_y < eyr; ++inner_y) {
-                for (int inner_x = sxr; inner_x < exr; ++inner_x) {
-                    T pixel = srcp[inner_y * src_stride + inner_x];
-                    float distance = std::abs(avg - static_cast<float>(pixel));
-                    float weight = distance;
-                    weight = contribution(weight, static_cast<float>(inner_x), static_cast<float>(inner_y), sx, ex, sy, ey);
-
-                    sum_pixel += weight * pixel;
-                    sum_weight += weight;
-                }
-            }
-
-            dstp[outer_y * dst_stride + outer_x] = static_cast<T>((sum_weight == 0.f) ? avg : sum_pixel / sum_weight);
-        }
-    }
-}
-
-template<typename T>
 static void dpidProcess(const T * VS_RESTRICT srcp, int src_stride, 
     const T * VS_RESTRICT downp, int down_stride, 
     T * VS_RESTRICT dstp, int dst_stride, 
     int src_w, int src_h, int dst_w, int dst_h, float lambda, 
     float src_left, float src_top) {
-
-    if (lambda == 1.0f)
-        return dpidProcess2(srcp, src_stride, downp, down_stride, dstp, dst_stride, src_w, src_h, dst_w, dst_h, lambda, src_left, src_top);
 
     const float scale_x = static_cast<float>(src_w) / dst_w;
     const float scale_y = static_cast<float>(src_h) / dst_h;
@@ -205,6 +147,14 @@ static const VSFrameRef *VS_CC dpidGetframe(int n, int activationReason, void **
 
         for (int plane = 0; plane < fi->numPlanes; ++plane) {
             if (d->process[plane]) {
+                float lamb = d->lambda[plane];
+                int ilamb = static_cast<int>(lamb);
+                if ((lamb < 26) && (std::abs(lamb - ilamb) < 1e-5))
+                    dpid_pow = &dpid_pow_iexp;
+                else if (std::abs(lamb - 0.5) < 1e-5)
+                    dpid_pow = &dpid_pow_sqrt;
+                else
+                    dpid_pow = &dpid_pow_pow;
                 const void *src1p = vsapi->getReadPtr(src1, plane);
                 const int src1_stride = vsapi->getStride(src1, plane) / fi->bytesPerSample;
                 const void *src2p = vsapi->getReadPtr(src2, plane);
