@@ -40,7 +40,7 @@ static float (* dpid_pow)(float, float);
 static float dpid_pow_iexp(float base, float exp)
 {
     float ret = 1.f;
-    for (int i=0; i < static_cast<int>(exp); i++)
+    for (int i = 0; i < static_cast<int>(exp); i++)
         ret *= base;
     return ret;
 }
@@ -149,9 +149,9 @@ static const VSFrameRef *VS_CC dpidGetframe(int n, int activationReason, void **
             if (d->process[plane]) {
                 float lamb = d->lambda[plane];
                 int ilamb = static_cast<int>(lamb);
-                if ((lamb < 26) && (std::abs(lamb - ilamb) < 1e-5))
+                if ((lamb > 0) && (lamb < 26) && (std::abs(lamb - ilamb) == 0.f))
                     dpid_pow = &dpid_pow_iexp;
-                else if (std::abs(lamb - 0.5) < 1e-5)
+                else if (lamb == 0.5f)
                     dpid_pow = &dpid_pow_sqrt;
                 else
                     dpid_pow = &dpid_pow_pow;
