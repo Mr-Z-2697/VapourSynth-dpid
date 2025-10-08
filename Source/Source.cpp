@@ -38,6 +38,7 @@ static float contribution(float f, float x, float y,
 static float dpid_pow(float base, float exp)
 {
     int iexp = static_cast<int>(exp);
+    // this "accidently" disables negative lambda, but negative lambda distroies output so whatever
     if ((exp < 26) && ((exp - iexp) < 1e-5))
     {
         float ret = 1.f;
@@ -45,7 +46,9 @@ static float dpid_pow(float base, float exp)
             ret *= base;
         return ret;
     }
-    else
+    else if (exp == 0.5f)
+        return std::sqrt(base);
+    else [[unlikely]]
         return std::pow(base,exp);
 }
 
